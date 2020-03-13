@@ -1,5 +1,7 @@
 ﻿using System;
+using System.Configuration;
 using System.IO;
+using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
@@ -11,12 +13,39 @@ namespace ReviewMe
 
         public string GetContent() => System.IO.File.ReadAllText(File);
 
-        public void SaveContent(string content) => System.IO.File.WriteAllText(File, content);
+        private static void WriteLog(string text)
+        {
+            string logPath = ConfigurationManager.AppSettings["LogPath"];
+            System.IO.File.WriteAllText(logPath, text);
+        }
 
-        public void SaveContentInUtf8(string content) => System.IO.File.WriteAllText(File, content, Encoding.UTF8);
+        public void SaveContent(string content)
+        {
+            WriteLog($"content saved at {DateTime.Now}");
+            System.IO.File.WriteAllText(File, content);
+        }
 
-        public void SaveContentInUnicode(string content) =>
+        public void SaveContentInUtf8(string content)
+        {
+            WriteLog($"content saved at {DateTime.Now}");
+            System.IO.File.WriteAllText(File, content, Encoding.UTF8);
+        }
+
+        public void SaveContentInUnicode(string content)
+        {
+            WriteLog($"content saved at {DateTime.Now}");
             System.IO.File.WriteAllText(File, content, Encoding.Unicode);
+        }
+
+        public DateTime GetCheckedTimestamp()
+        {
+            string[] allLines = System.IO.File.ReadAllLines(File);
+            string currentTimestamp = allLines
+                .Select(l => new {Line = l, Index = l.IndexOf(l, StringComparison.Ordinal)})
+                .Where(l => l.Line.Contains("Checked at")).OrderByDescending(l => l.Index).Select(l => l.Line)
+                .FirstOrDefault();
+            return DateTime.Parse(currentTimestamp.Replace("Checked at ", string.Empty));
+        }
     }
 
     public class Program
@@ -34,7 +63,7 @@ namespace ReviewMe
             {
                 p.File = f;
                 string currentContent = p.GetContent();
-                
+
                 var reader = new StreamReader(p.File, true);
                 reader.ReadLine();
                 var encoding = reader.CurrentEncoding;
@@ -51,6 +80,10 @@ namespace ReviewMe
                     p.SaveContentInUnicode(currentContent + $"\r\nChecked at {DateTime.Now}");
                 }
             });
+
+            p.File = @"C:\file4.txt";
+            DateTime dt = p.GetCheckedTimestamp();
+            Console.WriteLine("Last checked: " + dt);
         }
     }
 }
