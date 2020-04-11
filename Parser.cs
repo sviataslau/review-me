@@ -11,39 +11,33 @@ namespace ReviewMe
     {
         public string File { get; set; }
 
-        public string GetContent() => System.IO.File.ReadAllText(File);
+        public string GetContent() => string.IsNullOrEmpty(File) ? String.Empty : System.IO.File.ReadAllText(File);
 
         private static void WriteLog(string text)
         {
             string logPath = ConfigurationManager.AppSettings["LogPath"];
-            System.IO.File.WriteAllText(logPath, text);
+            if(!string.IsNullOrEmpty(logPath)) 
+                System.IO.File.AppendAllText(logPath, text); // append only the last line
         }
 
-        public void SaveContent(string content)
+        public void SaveContent(string content, Encoding encoding) //Refactored, made generic
         {
             WriteLog($"content saved at {DateTime.Now}");
-            System.IO.File.WriteAllText(File, content);
-        }
-
-        public void SaveContentInUtf8(string content)
-        {
-            WriteLog($"content saved at {DateTime.Now}");
-            System.IO.File.WriteAllText(File, content, Encoding.UTF8);
-        }
-
-        public void SaveContentInUnicode(string content)
-        {
-            WriteLog($"content saved at {DateTime.Now}");
-            System.IO.File.WriteAllText(File, content, Encoding.Unicode);
+            if(encoding.Equals(Encoding.UTF8) || encoding.Equals(Encoding.Unicode))
+                System.IO.File.AppendAllText(File, content, encoding); // append only the last line instead of reading all lines
+            else
+                System.IO.File.AppendAllText(File, content); 
         }
 
         public DateTime GetCheckedTimestamp()
         {
+            // Refactored this, since Index was not working properly
+            int counter = 0; 
             string[] allLines = System.IO.File.ReadAllLines(File);
-            string currentTimestamp = allLines
-                .Select(l => new {Line = l, Index = l.IndexOf(l, StringComparison.Ordinal)})
-                .Where(l => l.Line.Contains("Checked at")).OrderByDescending(l => l.Index).Select(l => l.Line)
-                .FirstOrDefault();
+            var currentTimestamp = allLines
+                    .Where(l => l.Contains("Checked at"))
+                    .Select(l => new { Line = l, Index = counter++ }).OrderByDescending(l => l.Index)
+                    .Select(l => l.Line).FirstOrDefault();
             return DateTime.Parse(currentTimestamp.Replace("Checked at ", string.Empty));
         }
     }
@@ -62,23 +56,15 @@ namespace ReviewMe
             Parallel.ForEach(files, f =>
             {
                 p.File = f;
-                string currentContent = p.GetContent();
+                
+                var encoding = Encoding.Default;
+                using (var reader = new StreamReader(p.File, true))
+                {
+                    reader.ReadLine();
+                    encoding = reader.CurrentEncoding;
+                }
 
-                var reader = new StreamReader(p.File, true);
-                reader.ReadLine();
-                var encoding = reader.CurrentEncoding;
-                if (encoding == Encoding.UTF8)
-                {
-                    p.SaveContentInUtf8(currentContent + $"\r\nChecked at {DateTime.Now}");
-                }
-                else if (encoding == Encoding.Unicode)
-                {
-                    p.SaveContentInUnicode(currentContent + $"\r\nChecked at {DateTime.Now}");
-                }
-                else
-                {
-                    p.SaveContentInUnicode(currentContent + $"\r\nChecked at {DateTime.Now}");
-                }
+                p.SaveContent($"Checked at {DateTime.Now}", encoding);
             });
 
             p.File = @"C:\file4.txt";
